@@ -17,11 +17,7 @@ from google.genai import types
 # ============================================================
 # На хостинге ключ будет браться из панели управления Secrets.
 # Для локального теста на ПК ты можешь создать файл .streamlit/secrets.toml
-if "GEMINI_API_KEY" in st.secrets:
-    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-else:
-    # Заглушка для локального запуска, если секреты не настроены
-    GEMINI_API_KEY = "AQ.Ab8RN6LusZhEGGrQWd3lWVag3fDFKUT5LpOER0ObEFING_DQ1w"
+GEMINI_API_KEY = "AQ.Ab8RN6LusZhEGGrQWd3lWVag3fDFKUT5LpOER0ObEFING_DQ1w"
 
 MODEL_NAME = "gemini-3.6-flash"  
 
