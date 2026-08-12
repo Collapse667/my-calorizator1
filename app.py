@@ -1,6 +1,6 @@
 """
-PWA / Web-версия Калоризатора для бесплатного хостинга Streamlit Cloud.
-Защищенное использование API-ключей через st.secrets.
+Финальная облачная версия Калоризатора v2.3.
+Прямая авторизация и чистый синтаксис для деплоя на Streamlit Cloud.
 """
 
 import json
@@ -13,12 +13,9 @@ from google import genai
 from google.genai import types
 
 # ============================================================
-# 1) БЕЗОПАСНОЕ ПОЛУЧЕНИЕ API-КЛЮЧА
+# 1) ПРЯМАЯ НАСТРОЙКА API-КЛЮЧА
 # ============================================================
-# На хостинге ключ будет браться из панели управления Secrets.
-# Для локального теста на ПК ты можешь создать файл .streamlit/secrets.toml
 GEMINI_API_KEY = "AQ.Ab8RN6LusZhEGGrQWd3lWVag3fDFKUT5LpOER0ObEFING_DQ1w"
-
 MODEL_NAME = "gemini-3.6-flash"  
 
 HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "history.json")
@@ -55,10 +52,11 @@ markdown-разметки, только чистый JSON вида:
   "macros": {{"proteins": 15, "fats": 28, "carbs": 12}}
 }}
 """
+
 def analyze_image(image_bytes: bytes, mime_type: str, extra_details: str = "") -> dict:
-    # Явно передаем API-ключ в клиент, чтобы избежать ошибки 401 на хостинге
-    client = genai.Client(api_key=GEMINI_API_KEY),
-    )
+    # Чистая инициализация клиента для стабильной работы в облаке
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    
     image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
     extra_context = ""
     if extra_details.strip():
