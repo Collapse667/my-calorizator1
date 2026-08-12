@@ -1,8 +1,3 @@
-"""
-Финальная облачная версия Калоризатора v2.3.
-Прямая авторизация и чистый синтаксис для деплоя на Streamlit Cloud.
-"""
-
 import json
 import os
 from datetime import datetime, date
@@ -12,12 +7,14 @@ import pandas as pd
 from google import genai
 from google.genai import types
 
-# ============================================================
-# 1) ПРЯМАЯ НАСТРОЙКА API-КЛЮЧА
-# ============================================================
-GEMINI_API_KEY = "AQ.Ab8RN6KwyfOHV5cvalfZ0LDY0t4KM5e-HgODY7L6tooVmhrTMQ"
-MODEL_NAME = "gemini-3.6-flash"  
+# Безопасное получение ключа из секретов хостинга
+if "GEMINI_API_KEY" in st.secrets:
+    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+else:
+    st.error("Критическая ошибка: API ключ не найден в Secrets хостинга!")
+    st.stop()
 
+MODEL_NAME = "gemini-3.6-flash"  
 HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "history.json")
 
 RESPONSE_SCHEMA = {
@@ -54,7 +51,7 @@ markdown-разметки, только чистый JSON вида:
 """
 
 def analyze_image(image_bytes: bytes, mime_type: str, extra_details: str = "") -> dict:
-    # Чистая инициализация клиента для стабильной работы в облаке
+    # Передаем ключ строго из переменной окружения
     client = genai.Client(api_key=GEMINI_API_KEY)
     
     image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
@@ -73,9 +70,6 @@ def analyze_image(image_bytes: bytes, mime_type: str, extra_details: str = "") -
     )
     return json.loads(response.text)
 
-# ============================================================
-# РАБОТА С ИСТОРИЕЙ
-# ============================================================
 def load_history() -> list:
     if not os.path.exists(HISTORY_FILE):
         return []
@@ -105,9 +99,6 @@ def add_to_history(dish_name, weight, calories, proteins, fats, carbs, meal_type
     history.append(entry)
     save_history(history)
 
-# ============================================================
-# ИНТЕРФЕЙС
-# ============================================================
 st.set_page_config(page_title="Калоризатор", page_icon="🍽️", layout="centered")
 
 st.markdown("""
@@ -119,7 +110,6 @@ st.markdown("""
 
 st.title("🍽️ Мобильный Калоризатор")
 
-# --- БЛОК 1: ДНЕВНАЯ НОРМА И ПРОГРЕСС ---
 history = load_history()
 today_str = date.today().isoformat()
 today_entries = [h for h in history if h["timestamp"].startswith(today_str)]
@@ -141,7 +131,7 @@ with c1:
 with c2:
     left_cal = daily_goal - total_cal
     if left_cal >= 0:
-        st.metric("Осталось", f"{left_cal} ккал")
+        st.metric("Осталось", f"{left_cal} kкал")
     else:
         st.metric("Перебор на", f"{abs(left_cal)} ккал", delta_color="inverse")
 
@@ -152,15 +142,12 @@ b3.caption(f"🍞 Угл: {total_c} г")
 
 st.divider()
 
-# --- БЛОК 2: ЗАГРУЗКА И АНАЛИЗ ФОТО ---
 st.subheader("📸 Добавить приём пищи")
-
 meal_type = st.selectbox("Тип приёма пищи:", ["Завтрак", "Обед", "Ужин", "Перекус"])
-
 uploaded_file = st.file_uploader("Сделай фото или выбери из галереи", type=["jpg", "jpeg", "png", "webp"])
 
 if uploaded_file is not None:
-    st.image(uploaded_file, caption="Выбранное фото", width="stretch")
+    st.image(uploaded_file, caption="Выбранное фото", use_container_width=True)
     extra_details = st.text_input("Уточнения (необязательно):", placeholder="Например: жарил без масла, соус сладкий")
 
     if "ai_result" not in st.session_state:
@@ -175,13 +162,12 @@ if uploaded_file is not None:
                 image_bytes = uploaded_file.getvalue()
                 mime_type = uploaded_file.type or "image/jpeg"
                 st.session_state.ai_result = analyze_image(image_bytes, mime_type, extra_details)
-                st.success("ИИ прислал оценку! Проверь и поправь данные ниже, если нужно.")
+                st.success("ИИ прислал оценку!")
             except Exception as e:
                 st.error(f"Ошибка ИИ: {e}")
 
     if st.session_state.ai_result:
         st.markdown("### ✏️ Проверка и корректировка")
-        
         edit_name = st.text_input("Название блюда:", value=st.session_state.ai_result["dish_name"])
         
         col_w, col_cal = st.columns(2)
@@ -195,51 +181,22 @@ if uploaded_file is not None:
         edit_c = col_c.number_input("Углеводы:", value=int(st.session_state.ai_result["macros"]["carbs"]), step=1)
 
         if st.button("💾 Сохранить в дневник", type="secondary"):
-            add_to_history(
-                dish_name=edit_name,
-                weight=edit_weight,
-                calories=edit_calories,
-                proteins=edit_p,
-                fats=edit_f,
-                carbs=edit_c,
-                meal_type=meal_type,
-                extra_details=extra_details
-            )
-            st.success("Запись успешно добавлена в историю!")
+            add_to_history(edit_name, edit_weight, edit_calories, edit_p, edit_f, edit_c, meal_type, extra_details)
+            st.success("Запись добавлена!")
             st.session_state.ai_result = None
             st.rerun()
 
 st.divider()
-
-# --- БЛОК 3: ИСТОРИЯ И ДНЕВНИК ---
-history = load_history()
-
 with st.expander(f"📜 История и дневник питания ({len(history)})", expanded=False):
     if not history:
         st.write("Здесь будут появляться ваши приёмы пищи.")
     else:
         df = pd.DataFrame(history)
-        df["date"] = df["timestamp"].str[:10]
-        
         for entry in reversed(history):
             ts = entry["timestamp"].replace("T", " ")[5:16]
             m_type = entry.get("meal_type", "Перекус")
             meal_emoji = {"Завтрак": "🌅", "Обед": "☀️", "Ужин": "🌙", "Перекус": "🍏"}.get(m_type, "🍽️")
-            
-            st.markdown(
-                f"**{ts} | {meal_emoji} {m_type}**\n"
-                f"**{entry['dish_name']}** ({entry['weight_g']}г) — **{entry['calories']} ккал**\n"
-                f"🧬 Б: {entry['proteins']}г | 🥑 Ж: {entry['fats']}г | 🍞 У: {entry['carbs']}г"
-            )
+            st.markdown(f"**{ts} | {meal_emoji} {m_type}**\n**{entry['dish_name']}** ({entry['weight_g']}г) — **{entry['calories']} ккал**\n🧬 Б: {entry['proteins']}г | 🥑 Ж: {entry['fats']}г | 🍞 У: {entry['carbs']}г")
             if entry.get("extra_details"):
                 st.caption(f"📝 *Уточнение: {entry['extra_details']}*")
             st.markdown("---")
-
-        col_a, col_b = st.columns(2)
-        with col_a:
-            csv_data = df.drop(columns=["date"]).to_csv(index=False).encode("utf-8")
-            st.download_button("⬇️ Скачать CSV", data=csv_data, file_name="calories_history.csv", mime="text/csv")
-        with col_b:
-            if st.button("🗑️ Очистить всё"):
-                save_history([])
-                st.rerun()
