@@ -38,9 +38,17 @@ RESPONSE_SCHEMA = {
     "required": ["dish_name", "estimated_weight_g", "calories", "macros"],
 }
 
-PROMPT_TEMPLATE = """Ты — эксперт-нутрициолог. Посмотри на фото блюда и максимально точно
+# Обновленный промпт с жесткими правилами калибровки веса фруктов/ягод
+PROMPT_TEMPLATE = """Ты — строгий эксперт-нутрициолог. Посмотри на фото блюда и максимально реалистично
 оцени его состав. Определи название блюда, примерный вес порции в граммах,
 общую калорийность и БЖУ (белки, жиры, углеводы в граммах).
+
+ВАЖНЫЕ ПРАВИЛА КАЛИБРОВКИ:
+1. Будь консервативен в оценке веса. Если на фото тарелка с ягодами (черешня, ежевика) и небольшими плодами (персики/нектарины), 
+   не завышай вес порции. Стандартная плоская тарелка таких фруктов весит примерно 350-500 грамм в сумме, а не 1-2 кг.
+2. Внимательно считай калорийность: свежие ягоды и персики — это водянистые продукты с низкой плотностью калорий 
+   (в среднем 40-50 ккал на 100г). Не присваивай им калорийность жирных или углеводных блюд.
+
 {extra_context}
 Отвечай СТРОГО в формате JSON, без каких-либо пояснений, комментариев или
 markdown-разметки, только чистый JSON вида:
@@ -70,6 +78,7 @@ def analyze_image(image_bytes: bytes, mime_type: str, extra_details: str = "") -
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=RESPONSE_SCHEMA,
+            temperature=0.0,  # Делаем ответы ИИ стабильными, убирая случайный разброс
         ),
     )
     return json.loads(response.text)
@@ -117,7 +126,6 @@ st.markdown("""
 
 st.title("🍽️ Мобильный Калоризатор")
 
-# --- БЛОК 1: ДНЕВНАЯ НОРМА И ПРОГРЕСС ---
 history = load_history()
 today_str = date.today().isoformat()
 today_entries = [h for h in history if h["timestamp"].startswith(today_str)]
@@ -150,7 +158,6 @@ b3.caption(f"🍞 Угл: {total_c} г")
 
 st.divider()
 
-# --- БЛОК 2: ЗАГРУЗКА И АНАЛИЗ ФОТО ---
 st.subheader("📸 Добавить приём пищи")
 meal_type = st.selectbox("Тип приёма пищи:", ["Завтрак", "Обед", "Ужин", "Перекус"])
 uploaded_file = st.file_uploader("Сделай фото или выбери из галереи", type=["jpg", "jpeg", "png", "webp"])
@@ -197,14 +204,12 @@ if uploaded_file is not None:
 
 st.divider()
 
-# --- БЛОК 3: ИСТОРИЯ И ДНЕВНИК С УДАЛЕНИЕМ ЗАПИСЕЙ ---
 with st.expander(f"📜 История и дневник питания ({len(history)})", expanded=False):
     if not history:
         st.write("Здесь будут появляться ваши приёмы пищи.")
     else:
         df = pd.DataFrame(history)
         
-        # Перебираем историю с конца, сохраняя индексы
         for idx, entry in enumerate(reversed(history)):
             real_idx = len(history) - 1 - idx
             
@@ -212,7 +217,6 @@ with st.expander(f"📜 История и дневник питания ({len(hi
             m_type = entry.get("meal_type", "Перекус")
             meal_emoji = {"Завтрак": "🌅", "Обед": "☀️", "Ужин": "🌙", "Перекус": "🍏"}.get(m_type, "🍽️")
             
-            # Пропорция 8 к 2 идеально подходит для мобильных экранов
             col_text, col_del = st.columns([8, 2])
             
             with col_text:
@@ -225,7 +229,6 @@ with st.expander(f"📜 История и дневник питания ({len(hi
                     st.caption(f"📝 *Уточнение: {entry['extra_details']}*")
             
             with col_del:
-                # Кнопка удаления с уникальным ID для каждой записи
                 if st.button("🗑️", key=f"del_{entry['timestamp']}_{real_idx}"):
                     updated_history = load_history()
                     if real_idx < len(updated_history):
