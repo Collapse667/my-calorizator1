@@ -15,7 +15,7 @@ from google.genai import types
 # ============================================================
 # 1) ПРЯМАЯ НАСТРОЙКА API-КЛЮЧА
 # ============================================================
-GEMINI_API_KEY = "AQ.Ab8RN6LusZhEGGrQWd3lWVag3fDFKUT5LpOER0ObEFING_DQ1w"
+GEMINI_API_KEY = "AQ.Ab8RN6KwyfOHV5cvalfZ0LDY0t4KM5e-HgODY7L6tooVmhrTMQ"
 MODEL_NAME = "gemini-3.6-flash"  
 
 HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "history.json")
