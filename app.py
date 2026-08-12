@@ -57,9 +57,7 @@ markdown-разметки, только чистый JSON вида:
 """
 def analyze_image(image_bytes: bytes, mime_type: str, extra_details: str = "") -> dict:
     # Явно передаем API-ключ в клиент, чтобы избежать ошибки 401 на хостинге
-    client = genai.Client(
-        api_key=GEMINI_API_KEY,
-        http_options=types.HttpOptions(client_args={"trust_env": False}),
+    client = genai.Client(api_key=GEMINI_API_KEY),
     )
     image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
     extra_context = ""
