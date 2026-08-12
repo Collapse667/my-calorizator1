@@ -7,7 +7,9 @@ import pandas as pd
 from google import genai
 from google.genai import types
 
-# Безопасное получение ключа из секретов хостинга
+# ============================================================
+# 1) НАСТРОЙКА API-КЛЮЧА И КОНФИГУРАЦИИ
+# ============================================================
 if "GEMINI_API_KEY" in st.secrets:
     GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 else:
@@ -50,8 +52,10 @@ markdown-разметки, только чистый JSON вида:
 }}
 """
 
+# ============================================================
+# 2) ФУНКЦИИ ЛОГИКИ ПРИЛОЖЕНИЯ
+# ============================================================
 def analyze_image(image_bytes: bytes, mime_type: str, extra_details: str = "") -> dict:
-    # Передаем ключ строго из переменной окружения
     client = genai.Client(api_key=GEMINI_API_KEY)
     
     image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
@@ -99,6 +103,9 @@ def add_to_history(dish_name, weight, calories, proteins, fats, carbs, meal_type
     history.append(entry)
     save_history(history)
 
+# ============================================================
+# 3) ИНТЕРФЕЙС STREAMLIT
+# ============================================================
 st.set_page_config(page_title="Калоризатор", page_icon="🍽️", layout="centered")
 
 st.markdown("""
@@ -110,6 +117,7 @@ st.markdown("""
 
 st.title("🍽️ Мобильный Калоризатор")
 
+# --- БЛОК 1: ДНЕВНАЯ НОРМА И ПРОГРЕСС ---
 history = load_history()
 today_str = date.today().isoformat()
 today_entries = [h for h in history if h["timestamp"].startswith(today_str)]
@@ -131,7 +139,7 @@ with c1:
 with c2:
     left_cal = daily_goal - total_cal
     if left_cal >= 0:
-        st.metric("Осталось", f"{left_cal} kкал")
+        st.metric("Осталось", f"{left_cal} ккал")
     else:
         st.metric("Перебор на", f"{abs(left_cal)} ккал", delta_color="inverse")
 
@@ -142,6 +150,7 @@ b3.caption(f"🍞 Угл: {total_c} г")
 
 st.divider()
 
+# --- БЛОК 2: ЗАГРУЗКА И АНАЛИЗ ФОТО ---
 st.subheader("📸 Добавить приём пищи")
 meal_type = st.selectbox("Тип приёма пищи:", ["Завтрак", "Обед", "Ужин", "Перекус"])
 uploaded_file = st.file_uploader("Сделай фото или выбери из галереи", type=["jpg", "jpeg", "png", "webp"])
@@ -187,16 +196,51 @@ if uploaded_file is not None:
             st.rerun()
 
 st.divider()
+
+# --- БЛОК 3: ИСТОРИЯ И ДНЕВНИК С УДАЛЕНИЕМ ЗАПИСЕЙ ---
 with st.expander(f"📜 История и дневник питания ({len(history)})", expanded=False):
     if not history:
         st.write("Здесь будут появляться ваши приёмы пищи.")
     else:
         df = pd.DataFrame(history)
-        for entry in reversed(history):
+        
+        # Перебираем историю с конца, сохраняя индексы
+        for idx, entry in enumerate(reversed(history)):
+            real_idx = len(history) - 1 - idx
+            
             ts = entry["timestamp"].replace("T", " ")[5:16]
             m_type = entry.get("meal_type", "Перекус")
             meal_emoji = {"Завтрак": "🌅", "Обед": "☀️", "Ужин": "🌙", "Перекус": "🍏"}.get(m_type, "🍽️")
-            st.markdown(f"**{ts} | {meal_emoji} {m_type}**\n**{entry['dish_name']}** ({entry['weight_g']}г) — **{entry['calories']} ккал**\n🧬 Б: {entry['proteins']}г | 🥑 Ж: {entry['fats']}г | 🍞 У: {entry['carbs']}г")
-            if entry.get("extra_details"):
-                st.caption(f"📝 *Уточнение: {entry['extra_details']}*")
+            
+            # Пропорция 8 к 2 идеально подходит для мобильных экранов
+            col_text, col_del = st.columns([8, 2])
+            
+            with col_text:
+                st.markdown(
+                    f"**{ts} | {meal_emoji} {m_type}**\n"
+                    f"**{entry['dish_name']}** ({entry['weight_g']}г) — **{entry['calories']} ккал**\n"
+                    f"🧬 Б: {entry['proteins']}г | 🥑 Ж: {entry['fats']}г | 🍞 У: {entry['carbs']}г"
+                )
+                if entry.get("extra_details"):
+                    st.caption(f"📝 *Уточнение: {entry['extra_details']}*")
+            
+            with col_del:
+                # Кнопка удаления с уникальным ID для каждой записи
+                if st.button("🗑️", key=f"del_{entry['timestamp']}_{real_idx}"):
+                    updated_history = load_history()
+                    if real_idx < len(updated_history):
+                        updated_history.pop(real_idx)
+                        save_history(updated_history)
+                        st.success(f"Удалено!")
+                        st.rerun()
+            
             st.markdown("---")
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            csv_data = df.to_csv(index=False).encode("utf-8")
+            st.download_button("⬇️ Скачать CSV", data=csv_data, file_name="calories_history.csv", mime="text/csv")
+        with col_b:
+            if st.button("🗑️ Очистить всю историю"):
+                save_history([])
+                st.rerun()
